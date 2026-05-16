@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: visitortrack_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 11.1.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Database migration
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          AUTH_SECRET: test-secret-key-at-least-32-characters-long-value
+          AUTH_URL: http://localhost:3000
+        run: env $(cat <<'EOF' | xargs) pnpm db:migrate
+          TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          AUTH_SECRET=test-secret-key-at-least-32-characters-long-value
+          AUTH_URL=http://localhost:3000
+          DEV_TENANT_SLUG=yugam
+          EOF
+
+      - name: Database seed
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          AUTH_SECRET: test-secret-key-at-least-32-characters-long-value
+          AUTH_URL: http://localhost:3000
+        run: env $(cat <<'EOF' | xargs) pnpm db:seed
+          TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          AUTH_SECRET=test-secret-key-at-least-32-characters-long-value
+          AUTH_URL=http://localhost:3000
+          DEV_TENANT_SLUG=yugam
+          EOF
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visitortrack_test
+          AUTH_SECRET: test-secret-key-at-least-32-characters-long-value
+          AUTH_URL: http://localhost:3000
+        run: pnpm test
