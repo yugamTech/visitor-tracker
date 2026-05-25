@@ -38,11 +38,15 @@ export async function middleware(request: NextRequest) {
 
   const tenantData = tenant[0]!
 
-  // Create response and set tenant headers
-  const response = NextResponse.next()
-  response.headers.set('x-tenant-id', String(tenantData.id))
-  response.headers.set('x-tenant-slug', tenantData.slug)
-  response.headers.set('x-tenant-name', tenantData.name)
+  // Forward tenant context to downstream RSC / route handlers via REQUEST headers.
+  // Headers set on NextResponse only reach the browser; `headers()` in handlers
+  // reads request headers, so we mutate those and pass them via the `request` option.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-tenant-id', String(tenantData.id))
+  requestHeaders.set('x-tenant-slug', tenantData.slug)
+  requestHeaders.set('x-tenant-name', tenantData.name)
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
 
   // Check if public route
   const isPublic =
@@ -60,6 +64,12 @@ export async function middleware(request: NextRequest) {
   const session = await auth()
 
   if (!session) {
+    return NextResponse.redirect(new URL('/signin', request.url))
+  }
+
+  // Defense-in-depth (ADR-0006): a session minted on one tenant's subdomain
+  // must not be honored on another tenant's subdomain.
+  if (session.user.tenantId !== tenantData.id) {
     return NextResponse.redirect(new URL('/signin', request.url))
   }
 
