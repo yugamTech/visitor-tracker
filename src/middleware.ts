@@ -48,6 +48,7 @@ export async function middleware(request: NextRequest) {
   const isPublic =
     PUBLIC_ROUTES.includes(pathname) ||
     pathname.startsWith('/pre-register/') ||
+    pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/pre-register') ||
     pathname.startsWith('/api/webhooks/')
 
